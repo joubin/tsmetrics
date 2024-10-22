@@ -223,7 +223,7 @@ func (a *AppConfig) registerLogMetrics() {
 }
 
 func (a *AppConfig) registerAPIMetrics() {
-	labels := []string{"hostname", "update_available", "os", "is_external", "user", "client_version"}
+	labels := []string{"hostname", "update_available", "os", "is_external", "user", "client_version", "lastSeen", "expires"}
 	n := "tailscale_hosts"
 	a.APIMetrics[n] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: n,
@@ -264,6 +264,8 @@ func (a *AppConfig) updateAPIMetrics(client APIClient) {
 			strconv.FormatBool(d.IsExternal),
 			d.User,
 			d.ClientVersion,
+			d.LastSeen,
+			d.Expires
 		).Set(1)
 	}
 }
