@@ -265,7 +265,7 @@ func (a *AppConfig) updateAPIMetrics(client APIClient) {
 			d.User,
 			d.ClientVersion,
 			d.LastSeen,
-			d.Expires
+			d.Expires,
 		).Set(1)
 	}
 }
