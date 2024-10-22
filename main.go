@@ -264,8 +264,8 @@ func (a *AppConfig) updateAPIMetrics(client APIClient) {
 			strconv.FormatBool(d.IsExternal),
 			d.User,
 			d.ClientVersion,
-			d.LastSeen,
-			d.Expires,
+			d.LastSeen.Format(time.RFC3339),
+			d.Expires.Format(time.RFC3339),
 		).Set(1)
 	}
 }
