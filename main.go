@@ -222,15 +222,67 @@ func (a *AppConfig) registerLogMetrics() {
 	}
 }
 
+// registerAPIMetrics initializes and registers various Prometheus metrics for tracking Tailscale host data in the tailnet.
+// Each metric is structured to capture specific attributes, improving clarity and flexibility.
+
 func (a *AppConfig) registerAPIMetrics() {
-	labels := []string{"hostname", "update_available", "os", "is_external", "user", "client_version", "last_seen", "expires"}
-	n := "tailscale_hosts"
-	a.APIMetrics[n] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: n,
-		Help: "Hosts in the tailnet",
-	}, labels)
-	prometheus.MustRegister(a.APIMetrics[n])
+    // Metric 1: Track the number of hosts per hostname and operating system.
+    hostCountMetric := prometheus.NewGaugeVec(
+        prometheus.GaugeOpts{
+            Name: "tailscale_host_count",
+            Help: "Number of hosts by hostname and operating system.",
+        },
+        []string{"hostname", "os"},
+    )
+    a.APIMetrics["tailscale_host_count"] = hostCountMetric
+    prometheus.MustRegister(a.APIMetrics["tailscale_host_count"])
+
+    // Metric 2: Track versioning of client software by hostname.
+    clientVersionMetric := prometheus.NewGaugeVec(
+        prometheus.GaugeOpts{
+            Name: "tailscale_client_version",
+            Help: "Distribution of client versions by hostname.",
+        },
+        []string{"hostname", "client_version"},
+    )
+    a.APIMetrics["tailscale_client_version"] = clientVersionMetric
+    prometheus.MustRegister(a.APIMetrics["tailscale_client_version"])
+
+    // Metric 3: Track external or internal status of users.
+    userExternalMetric := prometheus.NewGaugeVec(
+        prometheus.GaugeOpts{
+            Name: "tailscale_user_external_status",
+            Help: "Tracks if the user is internal or external.",
+        },
+        []string{"user", "is_external"},
+    )
+    a.APIMetrics["tailscale_user_external_status"] = userExternalMetric
+    prometheus.MustRegister(a.APIMetrics["tailscale_user_external_status"])
+
+    // Metric 4: Track host updates and expiration status.
+    updateExpireMetric := prometheus.NewGaugeVec(
+        prometheus.GaugeOpts{
+            Name: "tailscale_update_expiration_status",
+            Help: "Tracks update availability and expiration status of hosts.",
+        },
+        []string{"update_available", "expires"},
+    )
+    a.APIMetrics["tailscale_update_expiration_status"] = updateExpireMetric
+    prometheus.MustRegister(a.APIMetrics["tailscale_update_expiration_status"])
+
+    // Metric 5: Track the last seen status of hosts by hostname.
+    lastSeenMetric := prometheus.NewGaugeVec(
+        prometheus.GaugeOpts{
+            Name: "tailscale_host_last_seen",
+            Help: "Timestamp of the last time the host was seen.",
+        },
+        []string{"hostname", "last_seen"},
+    )
+    a.APIMetrics["tailscale_host_last_seen"] = lastSeenMetric
+    prometheus.MustRegister(a.APIMetrics["tailscale_host_last_seen"])
 }
+
+
 
 func (a *AppConfig) produceAPIDataLoop() {
 	for {
@@ -250,24 +302,33 @@ func (a *AppConfig) produceAPIDataLoop() {
 }
 
 func (a *AppConfig) updateAPIMetrics(client APIClient) {
-	devices, err := client.Devices(context.Background())
-	if err != nil {
-		log.Printf("produceAPIDataLoop() error: %s", err)
-		return
-	}
+    devices, err := client.Devices(context.Background())
+    if err != nil {
+        log.Printf("produceAPIDataLoop() error: %s", err)
+        return
+    }
 
-	for _, d := range devices {
-		a.APIMetrics["tailscale_hosts"].WithLabelValues(
-			d.Hostname,
-			strconv.FormatBool(d.UpdateAvailable),
-			d.OS,
-			strconv.FormatBool(d.IsExternal),
-			d.User,
-			d.ClientVersion,
-			d.LastSeen.Format(time.RFC3339),
-			d.Expires.Format(time.RFC3339),
-		).Set(1)
-	}
+    for _, d := range devices {
+        // Iterate through each registered metric in APIMetrics
+        for name, metric := range a.APIMetrics {
+            switch name {
+            case "tailscale_host_count":
+                metric.WithLabelValues(d.Hostname, d.OS).Set(1)
+
+            case "tailscale_client_version":
+                metric.WithLabelValues(d.Hostname, d.ClientVersion).Set(1)
+
+            case "tailscale_user_external_status":
+                metric.WithLabelValues(d.User, strconv.FormatBool(d.IsExternal)).Set(1)
+
+            case "tailscale_update_expiration_status":
+                metric.WithLabelValues(strconv.FormatBool(d.UpdateAvailable), d.Expires.Format(time.RFC3339)).Set(1)
+
+            case "tailscale_host_last_seen":
+                metric.WithLabelValues(d.Hostname, d.LastSeen.Format(time.RFC3339)).Set(1)
+            }
+        }
+    }
 }
 
 func (a *AppConfig) addHandlers() {
