@@ -280,6 +280,17 @@ func (a *AppConfig) registerAPIMetrics() {
     )
     a.APIMetrics["tailscale_host_last_seen"] = lastSeenMetric
     prometheus.MustRegister(a.APIMetrics["tailscale_host_last_seen"])
+
+
+	upMetric := prometheus.NewGaugeVec(
+        prometheus.GaugeOpts{
+            Name: "tailscale_up",
+            Help: "Indicates if the host is up (1) or down (0) based on the last seen time.",
+        },
+        []string{"hostname", "update_available", "os", "is_external", "user", "client_version", "last_seen", "expires"},
+    )
+    a.APIMetrics["tailscale_up"] = upMetric
+    prometheus.MustRegister(a.APIMetrics["tailscale_up"])
 }
 
 
@@ -309,6 +320,16 @@ func (a *AppConfig) updateAPIMetrics(client APIClient) {
     }
 
     for _, d := range devices {
+		now := time.Now()
+        // Convert LastSeen to time.Time from Unix timestamp
+        lastSeen := time.Unix(d.LastSeen.Unix(), 0)
+
+        // Check if LastSeen is within 5 minutes
+        isUp := 0.0
+        if now.Sub(lastSeen) <= 5*time.Minute {
+            isUp = 1.0
+        }
+
         // Iterate through each registered metric in APIMetrics
         for name, metric := range a.APIMetrics {
             switch name {
@@ -326,6 +347,18 @@ func (a *AppConfig) updateAPIMetrics(client APIClient) {
 
             case "tailscale_host_last_seen":
                 metric.WithLabelValues(d.Hostname, d.LastSeen.Format(time.RFC3339)).Set(1)
+
+			case "tailscale_up":
+                metric.WithLabelValues(
+                    d.Hostname,
+                    strconv.FormatBool(d.UpdateAvailable),
+                    d.OS,
+                    strconv.FormatBool(d.IsExternal),
+                    d.User,
+                    d.ClientVersion,
+                    d.LastSeen.Format(time.RFC3339),
+                    d.Expires.Format(time.RFC3339),
+                ).Set(isUp)
             }
         }
     }
